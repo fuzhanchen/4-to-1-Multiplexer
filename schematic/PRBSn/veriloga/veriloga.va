@@ -1,0 +1,72 @@
+// VerilogA for gz_VerilogA_lib, gz_PRBSn, veriloga
+
+`include "constants.vams"
+`include "disciplines.vams"
+
+module PRBSn(vclk, vout, vss);
+
+electrical vclk, vout, vss;
+parameter real v_high = 300m;
+parameter real v_low  = -300m;
+parameter real vtrans = 0.5;
+parameter real trise = 20.0p;
+parameter real tfall = 20.0p;
+parameter real tdel = 500.0p;
+parameter real jitter_rms = 3.0p; //rms of jitter
+//parameter real v_variance = 0.05; //v_variance of jitter
+parameter integer Len_N = 11; //length of PRBS
+parameter integer INST = 1; // initial of PRBS
+//7: x^7+x^6+1
+//9: x^9+x^5+1
+//11: x^11+x^9+1
+//15: x^15+x^14+1
+//20: x^20+x^3+1
+//23: x^23+x^18+1
+//31: x^31+x^28+1
+
+integer num[1:Len_N];
+integer seed; //seed for random number generation
+integer i,temp;
+real calout;
+real tj; //tj is the jitter of output
+real vj;
+real vamp;
+real vmid;
+
+analog begin
+        @(initial_step) begin
+                for (i = 1; i<Len_N+1; i=i+1) begin
+                        num[i] = (INST >> (i-1))%2;
+                end
+                seed = 11;
+                vj = 0;
+                vamp = (v_high - v_low) / 2;
+                vmid = (v_high + v_low) / 2;
+        end
+        @(cross(V(vclk) - vtrans, 1)) begin
+			case(Len_N)
+				7: temp = (num[7] + num[6]) % 2;
+				9: temp = (num[9] + num[5]) % 2;
+				11: temp = (num[11] + num[9]) % 2;
+				15: temp = (num[15] + num[14]) % 2;
+				20: temp = (num[20] + num[3]) % 2;
+				23: temp = (num[23] + num[18]) % 2;
+				31: temp = (num[31] + num[28]) % 2;
+			endcase
+               
+                for (i = Len_N; i > 1; i = i - 1) begin
+                        num[i] = num[i-1];
+                end
+                num[1] = temp;
+                tj = jitter_rms * $rdist_normal(seed, 0, 1);
+                //vj = v_variance * $rdist_normal(seed, 0, 1);
+                calout = (2*num[Len_N] - 1) * vamp + vmid;
+        end
+
+        V(vout, vss) <+ transition (calout, tdel+tj, trise, tfall);
+
+end
+
+
+
+endmodule
